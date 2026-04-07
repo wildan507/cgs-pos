@@ -89,15 +89,20 @@
 
 <div class="flex">
 
+  <!-- SIDEBAR -->
   <div class="w-48 h-screen p-4 sidebar">
     <h2 class="font-bold mb-4 text-yellow-400">Menu</h2>
+
     <button onclick="showMenu('kasir')" class="block mb-2 menu-btn">Kasir</button>
     <button onclick="showMenu('produk')" class="block mb-2 menu-btn">Produk</button>
     <button onclick="showMenu('laporan')" class="block mb-2 menu-btn">Laporan</button>
+    <button onclick="showMenu('opname')" class="block mb-2 menu-btn">Stok Opname</button>
   </div>
 
+  <!-- CONTENT -->
   <div class="flex-1 p-4">
 
+    <!-- KASIR -->
     <div id="kasir">
       <h1 class="text-xl font-bold mb-3 text-yellow-400">Kasir</h1>
 
@@ -129,10 +134,11 @@
       </button>
     </div>
 
+    <!-- PRODUK -->
     <div id="produk" class="hidden">
       <h1 class="text-xl font-bold mb-3 text-yellow-400">Produk</h1>
 
-      <div class="card p-3 space-x-2">
+      <div class="card p-3 flex gap-2 flex-wrap">
         <input id="nama" placeholder="Nama barang">
         <input id="harga" type="number" placeholder="Harga">
         <input id="hpp" type="number" placeholder="HPP">
@@ -144,10 +150,11 @@
       <div id="listProduk"></div>
     </div>
 
+    <!-- LAPORAN -->
     <div id="laporan" class="hidden">
       <h1 class="text-xl font-bold mb-3 text-yellow-400">Laporan</h1>
 
-      <div class="card p-3">
+      <div class="card p-3 space-y-2">
         <input type="date" id="start">
         <input type="date" id="end">
         <button onclick="loadLaporan()" class="btn px-3">Load</button>
@@ -156,8 +163,30 @@
       </div>
     </div>
 
-  </div>
+    <!-- STOK OPNAME -->
+    <div id="opname" class="hidden">
+      <h1 class="text-xl font-bold mb-3 text-yellow-400">Stok Opname</h1>
 
+      <div class="card p-3 space-y-3 max-w-md">
+        
+        <select id="opnameProduk" onchange="pilihProdukOpname()">
+          <option value="">Pilih Produk</option>
+        </select>
+
+        <input id="stokAwal" placeholder="Stok Saat Ini" readonly>
+
+        <input id="stokBaru" type="number" placeholder="Stok Baru" oninput="hitungSelisih()">
+
+        <input id="selisih" placeholder="Selisih" readonly>
+
+        <button onclick="simpanOpname()" class="btn px-3">
+          Simpan
+        </button>
+
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <div id="toast" class="fixed bottom-4 left-4 hidden text-white px-4 py-2 rounded"></div>
@@ -181,7 +210,7 @@ function toast(msg){
 }
 
 function showMenu(menu){
-  ['kasir','produk','laporan'].forEach(id=>{
+  ['kasir','produk','laporan','opname'].forEach(id=>{
     document.getElementById(id).classList.add('hidden')
   });
   document.getElementById(menu).classList.remove('hidden');
@@ -203,6 +232,7 @@ async function loadProducts(){
   );
 
   renderListProduk();
+  renderDropdownOpname();
 }
 
 async function tambahProduk(){
@@ -372,6 +402,60 @@ async function checkout(){
     console.error(e);
     toast(e.message || "Error saat checkout");
   }
+}
+
+function renderDropdownOpname(){
+  let select = document.getElementById('opnameProduk');
+  select.innerHTML = `<option value="">Pilih Produk</option>`;
+
+  products.forEach(p=>{
+    select.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+  });
+}
+
+function pilihProdukOpname(){
+  let id = document.getElementById('opnameProduk').value;
+  let p = products.find(x=>String(x.id)===String(id));
+  if(!p) return;
+
+  document.getElementById('stokAwal').value = p.stock;
+  document.getElementById('stokBaru').value = "";
+  document.getElementById('selisih').value = "";
+}
+
+function hitungSelisih(){
+  let awal = +document.getElementById('stokAwal').value || 0;
+  let baru = +document.getElementById('stokBaru').value || 0;
+
+  document.getElementById('selisih').value = baru - awal;
+}
+
+async function simpanOpname(){
+  let id = document.getElementById('opnameProduk').value;
+  let baru = +document.getElementById('stokBaru').value || 0;
+
+  if(!id){
+    toast("Pilih produk dulu");
+    return;
+  }
+
+  let { error } = await supabaseClient
+    .from('products')
+    .update({ stock: baru })
+    .eq('id', id);
+
+  if(error){
+    console.error(error);
+    toast("Gagal update stok");
+    return;
+  }
+
+  toast("Stok berhasil diupdate");
+  loadProducts();
+
+  document.getElementById('stokAwal').value = "";
+  document.getElementById('stokBaru').value = "";
+  document.getElementById('selisih').value = "";
 }
 
 loadProducts();
