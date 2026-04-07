@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CGS POS</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: radial-gradient(circle at top, #1a1a1a, #000000);
+      color: #e5e5e5;
+    }
+
+    .sidebar {
+      background: linear-gradient(180deg, #0a0a0a, #111);
+      border-right: 1px solid rgba(255,215,0,0.2);
+    }
+
+    .card {
+      background: rgba(20,20,20,0.7);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      border: 1px solid rgba(255,215,0,0.15);
+      box-shadow: 0 10px 40px rgba(255,215,0,0.08);
+      transition: 0.3s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 50px rgba(255,215,0,0.2);
+    }
+
+    .btn {
+      border-radius: 12px;
+      background: linear-gradient(135deg, #FFD700, #C9A000);
+      color: black;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(255,215,0,0.6);
+    }
+
+    .menu-btn {
+      transition: 0.2s;
+    }
+
+    .menu-btn:hover {
+      color: gold;
+      transform: translateX(4px);
+    }
+
+    input, select {
+      width: 100%;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,215,0,0.2);
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: gold;
+      box-shadow: 0 0 8px rgba(255,215,0,0.5);
+    }
+
+    thead {
+      background: linear-gradient(90deg, #111, #222);
+      color: gold;
+    }
+
+    tbody tr:hover {
+      background: rgba(255,215,0,0.05);
+    }
+
+    #toast {
+      background: rgba(0,0,0,0.8);
+      border-left: 4px solid gold;
+      box-shadow: 0 0 15px rgba(255,215,0,0.4);
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="flex">
+
+  <div class="w-48 h-screen p-4 sidebar">
+    <h2 class="font-bold mb-4 text-yellow-400">Menu</h2>
+    <button onclick="showMenu('kasir')" class="block mb-2 menu-btn">Kasir</button>
+    <button onclick="showMenu('produk')" class="block mb-2 menu-btn">Produk</button>
+    <button onclick="showMenu('laporan')" class="block mb-2 menu-btn">Laporan</button>
+  </div>
+
+  <div class="flex-1 p-4">
+
+    <div id="kasir">
+      <h1 class="text-xl font-bold mb-3 text-yellow-400">Kasir</h1>
+
+      <button onclick="tambahBaris()" class="px-3 py-1 mb-3 btn">
+        + Tambah Item
+      </button>
+
+      <div class="card p-3">
+        <table class="w-full text-sm table-fixed">
+          <thead>
+            <tr>
+              <th class="w-4/12 p-2 text-left">Barang</th>
+              <th class="w-2/12 p-2 text-right">Harga</th>
+              <th class="w-2/12 p-2 text-center">Qty</th>
+              <th class="w-3/12 p-2 text-right">Total</th>
+              <th class="w-1/12"></th>
+            </tr>
+          </thead>
+          <tbody id="cart"></tbody>
+        </table>
+      </div>
+
+      <h2 class="mt-4 text-xl font-bold text-right text-yellow-400">
+        Total: Rp <span id="total">0</span>
+      </h2>
+
+      <button onclick="checkout()" class="px-4 py-2 mt-2 float-right btn">
+        Bayar
+      </button>
+    </div>
+
+    <div id="produk" class="hidden">
+      <h1 class="text-xl font-bold mb-3 text-yellow-400">Produk</h1>
+
+      <div class="card p-3 space-x-2">
+        <input id="nama" placeholder="Nama barang">
+        <input id="harga" type="number" placeholder="Harga">
+        <input id="hpp" type="number" placeholder="HPP">
+        <input id="stok" type="number" placeholder="Stok">
+        <button onclick="tambahProduk()" class="btn px-3">Tambah</button>
+      </div>
+
+      <h3 class="mt-4 font-semibold">List Produk</h3>
+      <div id="listProduk"></div>
+    </div>
+
+    <div id="laporan" class="hidden">
+      <h1 class="text-xl font-bold mb-3 text-yellow-400">Laporan</h1>
+
+      <div class="card p-3">
+        <input type="date" id="start">
+        <input type="date" id="end">
+        <button onclick="loadLaporan()" class="btn px-3">Load</button>
+
+        <div id="hasilLaporan" class="mt-4"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="toast" class="fixed bottom-4 left-4 hidden text-white px-4 py-2 rounded"></div>
+
+<script>
+const supabaseClient = window.supabase.createClient(
+  "https://xcxqjfwmspdpwhbrevdm.supabase.co",
+  "sb_publishable_srKsD-Jo3uGGzs69xAO9_Q_6-M93B0p"
+);
+
+let products = [];
+let cart = [];
+
+function rupiah(num){ return Number(num||0).toLocaleString('id-ID'); }
+
+function toast(msg){
+  let t = document.getElementById('toast');
+  t.innerText = msg;
+  t.classList.remove('hidden');
+  setTimeout(()=>t.classList.add('hidden'),2000);
+}
+
+function showMenu(menu){
+  ['kasir','produk','laporan'].forEach(id=>{
+    document.getElementById(id).classList.add('hidden')
+  });
+  document.getElementById(menu).classList.remove('hidden');
+}
+
+async function loadProducts(){
+  let { data, error } = await supabaseClient.from('products').select('*');
+
+  if(error){
+    console.error(error);
+    toast("Gagal load produk");
+    return;
+  }
+
+  if(!data) data = [];
+
+  products = data.sort((a,b)=>
+    (a.name || "").localeCompare(b.name || "")
+  );
+
+  renderListProduk();
+}
+
+async function tambahProduk(){
+  await supabaseClient.from('products').insert([{
+    name: nama.value,
+    price: +harga.value || 0,
+    stock: +stok.value || 0,
+    hpp: +hpp.value || 0
+  }]);
+
+  toast("Produk ditambah");
+  loadProducts();
+}
+
+function renderListProduk(){
+  let div = document.getElementById('listProduk');
+  div.innerHTML = "";
+
+  if(products.length === 0){
+    div.innerHTML = `<div class="text-gray-400">Tidak ada produk</div>`;
+    return;
+  }
+
+  products.forEach(p=>{
+    div.innerHTML += `
+      <div class="card p-2 mb-2 hover:scale-[1.01]">
+        ${p.name} | Rp${rupiah(p.price)} | HPP Rp${rupiah(p.hpp)} | Stok ${p.stock}
+      </div>`;
+  });
+}
+
+function tambahBaris(){
+  cart.push({product_id:null,price:0,qty:1,total:0,hpp:0});
+  renderCart();
+}
+
+function renderCart(){
+  let tbody = document.getElementById('cart');
+  tbody.innerHTML="";
+  let total=0;
+
+  cart.forEach((item,i)=>{
+    tbody.innerHTML+=`
+      <tr>
+        <td class="p-1">
+          <select onchange="pilihProduk(${i},this.value)">
+            <option value="">Pilih</option>
+            ${products.map(p=>`
+              <option value="${p.id}" ${String(item.product_id)===String(p.id)?"selected":""}>
+                ${p.name}
+              </option>`).join("")}
+          </select>
+        </td>
+
+        <td class="p-1 text-right">
+          <input value="${item.price}" onchange="ubahHarga(${i},this.value)">
+        </td>
+
+        <td class="p-1 text-center">
+          <input value="${item.qty}" onchange="ubahQty(${i},this.value)">
+        </td>
+
+        <td class="p-1 text-right">
+          <input value="${item.total}" onchange="ubahTotal(${i},this.value)">
+        </td>
+
+        <td class="text-center">
+          <button onclick="hapusItem(${i})">❌</button>
+        </td>
+      </tr>`;
+    total+=item.total;
+  });
+
+  document.getElementById('total').innerText=rupiah(total);
+}
+
+function pilihProduk(i,id){
+  let p = products.find(x=>String(x.id)===String(id));
+  if(!p) return;
+
+  cart[i]={product_id:p.id,price:p.price,qty:1,total:p.price,hpp:p.hpp};
+  renderCart();
+}
+
+function ubahHarga(i,v){
+  cart[i].price=Math.max(0,+v||0);
+  cart[i].total=cart[i].price*cart[i].qty;
+  renderCart();
+}
+
+function ubahQty(i,v){
+  cart[i].qty=Math.max(1,+v||1);
+  cart[i].total=cart[i].qty*cart[i].price;
+  renderCart();
+}
+
+function ubahTotal(i,v){
+  cart[i].total=Math.max(0,+v||0);
+  cart[i].price=cart[i].total/cart[i].qty;
+  renderCart();
+}
+
+function hapusItem(i){
+  cart.splice(i,1);
+  renderCart();
+}
+
+async function loadLaporan(){
+  let start = document.getElementById('start').value;
+  let end = document.getElementById('end').value;
+
+  let { data, error } = await supabaseClient
+    .from('transaction_items')
+    .select(`qty, price, hpp, transactions(created_at)`)
+    .gte('transactions.created_at', start)
+    .lte('transactions.created_at', end);
+
+  if(error || !data){
+    toast("Gagal load laporan");
+    return;
+  }
+
+  let omset = 0;
+  let hppTotal = 0;
+
+  data.forEach(item => {
+    omset += item.qty * item.price;
+    hppTotal += item.qty * item.hpp;
+  });
+
+  let margin = omset - hppTotal;
+
+  document.getElementById('hasilLaporan').innerHTML = `
+    <div class="card p-3 mt-3">
+      <div>Omset: Rp ${rupiah(omset)}</div>
+      <div>HPP: Rp ${rupiah(hppTotal)}</div>
+      <div class="text-yellow-400 font-bold">Margin: Rp ${rupiah(margin)}</div>
+    </div>
+  `;
+}
+
+async function checkout(){
+
+  if(cart.length === 0){
+    toast("Cart kosong");
+    return;
+  }
+
+  try {
+
+    let { data, error } = await supabaseClient.rpc('checkout_transaction', {
+      p_items: cart
+    });
+
+    if(error){
+      throw error;
+    }
+
+    console.log("ID Transaksi:", data);
+
+    cart=[];
+    await loadProducts();
+    renderCart();
+    toast("Transaksi berhasil");
+
+  } catch(e){
+    console.error(e);
+    toast(e.message || "Error saat checkout");
+  }
+}
+
+loadProducts();
+</script>
+
+</body>
+</html>
