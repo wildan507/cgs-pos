@@ -82,6 +82,34 @@
       border-left: 4px solid gold;
       box-shadow: 0 0 15px rgba(255,215,0,0.4);
     }
+
+    /* tombol edit (biru neon) */
+.btn-edit {
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  box-shadow: 0 0 8px rgba(0,198,255,0.6);
+  transition: 0.2s;
+}
+
+.btn-edit:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(0,198,255,1);
+}
+
+/* tombol hapus (merah neon) */
+.btn-delete {
+  background: linear-gradient(135deg, #ff4b2b, #ff0000);
+  box-shadow: 0 0 8px rgba(255,0,0,0.6);
+  transition: 0.2s;
+}
+
+.btn-delete:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255,0,0,1);
+}
+
+button {
+  cursor: pointer;
+}
   </style>
 </head>
 
@@ -293,35 +321,51 @@ async function loadSuppliers(){
   renderSupplier();
 }
 
-function renderSupplier(){
-  let tbody = document.getElementById('listSupplier');
-  let keyword = document.getElementById('searchSupplier').value.toLowerCase();
+function renderSupplier() {
+  const tbody = document.getElementById('listSupplier');
+  const keyword = document.getElementById('searchSupplier').value.toLowerCase();
 
   tbody.innerHTML = "";
 
-  let filtered = suppliers.filter(s =>
+  const filtered = suppliers.filter(s =>
     (s.name || "").toLowerCase().includes(keyword)
   );
 
-  if(filtered.length === 0){
+  if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="2">Tidak ada data</td></tr>`;
     return;
   }
 
-  filtered.forEach(s=>{
-    tbody.innerHTML += `
+  let html = "";
+
+  filtered.forEach(s => {
+    html += `
       <tr>
         <td class="p-2">${s.name}</td>
-        <td class="p-2 text-center">
-          <button onclick="editSupplier('${s.id}','${s.name}')">Edit</button>
-          |
-          <button onclick="hapusSupplier('${s.id}')">Hapus</button>
+        <td class="p-2 text-center space-x-2">
+          
+          <button 
+            onclick="editSupplier(this)"
+            data-id="${s.id}"
+            data-name="${s.name}"
+            class="px-3 py-1 rounded-lg text-white font-semibold btn-edit">
+            Edit
+          </button>
+
+          <button 
+            onclick="hapusSupplier(this)"
+            data-id="${s.id}"
+            class="px-3 py-1 rounded-lg text-white font-semibold btn-delete">
+            Hapus
+          </button>
+
         </td>
       </tr>
     `;
   });
-}
 
+  tbody.innerHTML = html;
+}
 async function tambahSupplier(){
   let nama = document.getElementById('namaSupplier').value;
 
@@ -345,41 +389,48 @@ async function tambahSupplier(){
   loadSuppliers();
 }
 
-async function hapusSupplier(id){
-  if(!confirm("Yakin hapus?")) return;
+function hapusSupplier(el) {
+  const id = el.dataset.id;
 
-  let { error } = await supabaseClient
+  if (!confirm("Yakin hapus?")) return;
+
+  supabaseClient
     .from('suppliers')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .then(({ error }) => {
+      if (error) {
+        console.error(error);
+        toast("Gagal hapus");
+        return;
+      }
 
-  if(error){
-    console.error(error);
-    toast("Gagal hapus");
-    return;
-  }
-
-  toast("Supplier dihapus");
-  loadSuppliers();
+      toast("Supplier dihapus");
+      loadSuppliers();
+    });
 }
 
-async function editSupplier(id, namaLama){
-  let namaBaru = prompt("Edit nama:", namaLama);
-  if(!namaBaru) return;
+function editSupplier(el) {
+  const id = el.dataset.id;
+  const namaLama = el.dataset.name;
 
-  let { error } = await supabaseClient
+  let namaBaru = prompt("Edit nama:", namaLama);
+  if (!namaBaru) return;
+
+  supabaseClient
     .from('suppliers')
     .update({ name: namaBaru })
-    .eq('id', id);
+    .eq('id', id)
+    .then(({ error }) => {
+      if (error) {
+        console.error(error);
+        toast("Gagal edit");
+        return;
+      }
 
-  if(error){
-    console.error(error);
-    toast("Gagal edit");
-    return;
-  }
-
-  toast("Supplier diupdate");
-  loadSuppliers();
+      toast("Supplier diupdate");
+      loadSuppliers();
+    });
 }
 
 function toggleFormSupplier(){
