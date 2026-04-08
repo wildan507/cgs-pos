@@ -97,6 +97,7 @@
     <button onclick="showMenu('produk')" class="block mb-2 menu-btn">Produk</button>
     <button onclick="showMenu('laporan')" class="block mb-2 menu-btn">Laporan</button>
     <button onclick="showMenu('opname')" class="block mb-2 menu-btn">Stok Opname</button>
+    <button onclick="showMenu('supplier')" class="block mb-2 menu-btn">Supplier</button>
   </div>
 
   <!-- CONTENT -->
@@ -163,30 +164,59 @@
       </div>
     </div>
 
-    <!-- STOK OPNAME -->
-    <div id="opname" class="hidden">
-      <h1 class="text-xl font-bold mb-3 text-yellow-400">Stok Opname</h1>
+<!-- STOK OPNAME -->
+<div id="opname" class="hidden">
+  <h1 class="text-xl font-bold mb-3 text-yellow-400">Stok Opname</h1>
 
-      <div class="card p-3 space-y-3 max-w-md">
-        
-        <select id="opnameProduk" onchange="pilihProdukOpname()">
-          <option value="">Pilih Produk</option>
-        </select>
+  <div class="card p-3 space-y-3 max-w-md">
+    
+    <select id="opnameProduk" onchange="pilihProdukOpname()">
+      <option value="">Pilih Produk</option>
+    </select>
 
-        <input id="stokAwal" placeholder="Stok Saat Ini" readonly>
+    <input id="stokAwal" placeholder="Stok Saat Ini" readonly>
 
-        <input id="stokBaru" type="number" placeholder="Stok Baru" oninput="hitungSelisih()">
+    <input id="stokBaru" type="number" placeholder="Stok Baru" oninput="hitungSelisih()">
 
-        <input id="selisih" placeholder="Selisih" readonly>
+    <input id="selisih" placeholder="Selisih" readonly>
 
-        <button onclick="simpanOpname()" class="btn px-3">
-          Simpan
-        </button>
-
-      </div>
-    </div>
+    <button onclick="simpanOpname()" class="btn px-3">
+      Simpan
+    </button>
 
   </div>
+</div>
+
+<!-- SUPPLIER -->
+<div id="supplier" class="hidden">
+  <h1 class="text-xl font-bold mb-3 text-yellow-400">Supplier</h1>
+
+  <button onclick="toggleFormSupplier()" class="btn px-3 mb-3">
+    + Tambah Supplier
+  </button>
+
+  <div id="formSupplier" class="card p-3 mb-3 hidden space-y-2 max-w-md">
+    <input id="namaSupplier" placeholder="Nama Supplier">
+    <button onclick="tambahSupplier()" class="btn px-3">Simpan</button>
+  </div>
+
+  <input id="searchSupplier" placeholder="Cari supplier..." 
+         oninput="renderSupplier()" class="mb-3 max-w-md">
+
+  <div class="card p-3">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th class="text-left p-2">Nama Supplier</th>
+          <th class="text-center p-2">Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="listSupplier"></tbody>
+    </table>
+  </div>
+</div>
+
+</div>
 </div>
 
 <div id="toast" class="fixed bottom-4 left-4 hidden text-white px-4 py-2 rounded"></div>
@@ -198,6 +228,7 @@ const supabaseClient = window.supabase.createClient(
 );
 
 let products = [];
+let suppliers = [];
 let cart = [];
 
 function rupiah(num){ return Number(num||0).toLocaleString('id-ID'); }
@@ -210,7 +241,7 @@ function toast(msg){
 }
 
 function showMenu(menu){
-  ['kasir','produk','laporan','opname'].forEach(id=>{
+  ['kasir','produk','laporan','opname','supplier'].forEach(id=>{
     document.getElementById(id).classList.add('hidden')
   });
   document.getElementById(menu).classList.remove('hidden');
@@ -245,6 +276,115 @@ async function tambahProduk(){
 
   toast("Produk ditambah");
   loadProducts();
+}
+
+async function loadSuppliers(){
+  let { data, error } = await supabaseClient
+    .from('suppliers')
+    .select('*');
+
+  if(error){
+    console.error(error);
+    toast("Gagal load supplier");
+    return;
+  }
+
+  suppliers = data || [];
+  renderSupplier();
+}
+
+function renderSupplier(){
+  let tbody = document.getElementById('listSupplier');
+  let keyword = document.getElementById('searchSupplier').value.toLowerCase();
+
+  tbody.innerHTML = "";
+
+  let filtered = suppliers.filter(s =>
+    (s.name || "").toLowerCase().includes(keyword)
+  );
+
+  if(filtered.length === 0){
+    tbody.innerHTML = `<tr><td colspan="2">Tidak ada data</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(s=>{
+    tbody.innerHTML += `
+      <tr>
+        <td class="p-2">${s.name}</td>
+        <td class="p-2 text-center">
+          <button onclick="editSupplier('${s.id}','${s.name}')">Edit</button>
+          |
+          <button onclick="hapusSupplier('${s.id}')">Hapus</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+async function tambahSupplier(){
+  let nama = document.getElementById('namaSupplier').value;
+
+  if(!nama){
+    toast("Nama tidak boleh kosong");
+    return;
+  }
+
+  let { error } = await supabaseClient
+    .from('suppliers')
+    .insert([{ name: nama }]);
+
+  if(error){
+    console.error(error);
+    toast("Gagal tambah supplier");
+    return;
+  }
+
+  toast("Supplier ditambahkan");
+  document.getElementById('namaSupplier').value = "";
+  loadSuppliers();
+}
+
+async function hapusSupplier(id){
+  if(!confirm("Yakin hapus?")) return;
+
+  let { error } = await supabaseClient
+    .from('suppliers')
+    .delete()
+    .eq('id', id);
+
+  if(error){
+    console.error(error);
+    toast("Gagal hapus");
+    return;
+  }
+
+  toast("Supplier dihapus");
+  loadSuppliers();
+}
+
+async function editSupplier(id, namaLama){
+  let namaBaru = prompt("Edit nama:", namaLama);
+  if(!namaBaru) return;
+
+  let { error } = await supabaseClient
+    .from('suppliers')
+    .update({ name: namaBaru })
+    .eq('id', id);
+
+  if(error){
+    console.error(error);
+    toast("Gagal edit");
+    return;
+  }
+
+  toast("Supplier diupdate");
+  loadSuppliers();
+}
+
+function toggleFormSupplier(){
+  let f = document.getElementById('formSupplier');
+  f.classList.toggle('hidden');
 }
 
 function renderListProduk(){
@@ -459,6 +599,7 @@ async function simpanOpname(){
 }
 
 loadProducts();
+loadSuppliers();
 </script>
 
 </body>
