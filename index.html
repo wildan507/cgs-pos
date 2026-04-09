@@ -165,20 +165,64 @@ button {
     </div>
 
     <!-- PRODUK -->
-    <div id="produk" class="hidden">
-      <h1 class="text-xl font-bold mb-3 text-yellow-400">Produk</h1>
+<div id="produk" class="hidden">
+  <h1 class="text-xl font-bold mb-3 text-yellow-400">Produk</h1>
 
-      <div class="card p-3 flex gap-2 flex-wrap">
-        <input id="nama" placeholder="Nama barang">
-        <input id="harga" type="number" placeholder="Harga">
-        <input id="hpp" type="number" placeholder="HPP">
-        <input id="stok" type="number" placeholder="Stok">
-        <button onclick="tambahProduk()" class="btn px-3">Tambah</button>
-      </div>
+  <!-- TOMBOL TAMBAH -->
+  <button onclick="toggleFormProduk()" 
+    class="px-4 py-2 mb-3 rounded-lg text-white font-bold"
+    style="background: linear-gradient(135deg,#001f3f,#0074D9); box-shadow: 0 0 10px #0074D9;">
+    + Tambah Produk
+  </button>
 
-      <h3 class="mt-4 font-semibold">List Produk</h3>
-      <div id="listProduk"></div>
-    </div>
+  <!-- FORM (HIDDEN) -->
+  <div id="formProduk" class="card p-3 mb-3 hidden space-y-2 max-w-md">
+
+    <input id="sku" placeholder="SKU">
+
+    <select id="type">
+      <option value="">Pilih Type</option>
+      <option value="PPN">PPN</option>
+      <option value="Non PPN">Non PPN</option>
+    </select>
+
+    <input id="nama" placeholder="Nama barang">
+    <input id="harga" type="number" placeholder="Harga">
+    <input id="hpp" type="number" placeholder="HPP">
+    <input id="stok" type="number" placeholder="Stok">
+
+    <button onclick="tambahProduk()" 
+      class="px-3 py-2 rounded-lg text-white font-bold"
+      style="background: linear-gradient(135deg,#00ff99,#00cc66); box-shadow: 0 0 10px #00ff99;">
+      Simpan
+    </button>
+
+  </div>
+
+  <!-- SEARCH -->
+  <input id="searchProduk" 
+         placeholder="Cari produk..." 
+         oninput="renderListProduk()" 
+         class="mb-3 max-w-md">
+
+  <!-- TABEL PRODUK -->
+  <div class="card p-3">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th class="p-2 text-left">SKU</th>
+          <th class="p-2 text-left">Nama</th>
+          <th class="p-2 text-left">Type</th>
+          <th class="p-2 text-right">Harga</th>
+          <th class="p-2 text-right">HPP</th>
+          <th class="p-2 text-right">Stok</th>
+          <th class="p-2 text-center">Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="listProduk"></tbody>
+    </table>
+  </div>
+</div>
 
     <!-- LAPORAN -->
     <div id="laporan" class="hidden">
@@ -338,6 +382,10 @@ function showMenu(menu){
   }
 }
 
+function toggleFormProduk(){
+  document.getElementById('formProduk').classList.toggle('hidden');
+}
+
 async function loadProducts(){
   let { data, error } = await supabaseClient.from('products').select('*');
 
@@ -358,14 +406,57 @@ async function loadProducts(){
 }
 
 async function tambahProduk(){
-  await supabaseClient.from('products').insert([{
-    name: nama.value,
+
+  let namaVal = nama.value.trim();
+  let skuVal = sku.value.trim();
+  let typeVal = type.value;
+
+  // VALIDASI
+  if(!namaVal){
+    toast("Nama tidak boleh kosong");
+    return;
+  }
+
+  if(!typeVal){
+    toast("Pilih type barang");
+    return;
+  }
+
+  // CEK DUPLIKAT (case insensitive)
+  let exist = products.find(p => 
+    (p.name || "").toLowerCase() === namaVal.toLowerCase()
+  );
+
+  if(exist){
+    toast("Produk sudah ada");
+    return;
+  }
+
+  let { error } = await supabaseClient.from('products').insert([{
+    sku: skuVal,
+    name: namaVal,
+    type: typeVal,
     price: +harga.value || 0,
     stock: +stok.value || 0,
     hpp: +hpp.value || 0
   }]);
 
+  if(error){
+    console.error(error);
+    toast("Gagal tambah produk");
+    return;
+  }
+
   toast("Produk ditambah");
+
+  // reset
+  sku.value = "";
+  nama.value = "";
+  harga.value = "";
+  hpp.value = "";
+  stok.value = "";
+  type.value = "";
+
   loadProducts();
 }
 
@@ -502,20 +593,101 @@ function toggleFormSupplier(){
 }
 
 function renderListProduk(){
-  let div = document.getElementById('listProduk');
-  div.innerHTML = "";
+  let tbody = document.getElementById('listProduk');
+  let keyword = document.getElementById('searchProduk').value.toLowerCase();
 
-  if(products.length === 0){
-    div.innerHTML = `<div class="text-gray-400">Tidak ada produk</div>`;
+  tbody.innerHTML = "";
+
+  let filtered = products.filter(p =>
+    (p.name || "").toLowerCase().includes(keyword)
+  );
+
+  if(filtered.length === 0){
+    tbody.innerHTML = `<tr><td colspan="7" class="p-2 text-center text-gray-400">Tidak ada produk</td></tr>`;
     return;
   }
 
-  products.forEach(p=>{
-    div.innerHTML += `
-      <div class="card p-2 mb-2 hover:scale-[1.01]">
-        ${p.name} | Rp${rupiah(p.price)} | HPP Rp${rupiah(p.hpp)} | Stok ${p.stock}
-      </div>`;
+  filtered.forEach(p=>{
+    tbody.innerHTML += `
+      <tr class="hover:bg-yellow-400/10 transition">
+        <td class="p-2">${p.sku || '-'}</td>
+        <td class="p-2">${p.name}</td>
+        <td class="p-2">${p.type || '-'}</td>
+        <td class="p-2 text-right">Rp ${rupiah(p.price)}</td>
+        <td class="p-2 text-right">Rp ${rupiah(p.hpp)}</td>
+        <td class="p-2 text-right font-bold text-yellow-400">${p.stock}</td>
+
+        <td class="p-2 text-center space-x-2">
+
+          <button 
+            onclick="editProduk('${p.id}')"
+            class="px-2 py-1 rounded text-white"
+            style="background: linear-gradient(135deg,#0074D9,#00c3ff); box-shadow:0 0 8px #00c3ff;">
+            Edit
+          </button>
+
+          <button 
+            onclick="hapusProduk('${p.id}')"
+            class="px-2 py-1 rounded text-white"
+            style="background: linear-gradient(135deg,#ff0040,#ff5555); box-shadow:0 0 8px #ff0040;">
+            Hapus
+          </button>
+
+        </td>
+      </tr>
+    `;
   });
+}
+
+async function hapusProduk(id){
+
+  if(!confirm("Yakin hapus produk?")) return;
+
+  let { error } = await supabaseClient
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if(error){
+    console.error(error);
+    toast("Gagal hapus");
+    return;
+  }
+
+  toast("Produk dihapus");
+  loadProducts();
+}
+
+async function editProduk(id){
+
+  let p = products.find(x=>String(x.id)===String(id));
+  if(!p) return;
+
+  let namaBaru = prompt("Nama:", p.name);
+  if(!namaBaru) return;
+
+  let hargaBaru = prompt("Harga:", p.price);
+  let hppBaru = prompt("HPP:", p.hpp);
+  let typeBaru = prompt("Type (PPN / Non PPN):", p.type);
+
+  let { error } = await supabaseClient
+    .from('products')
+    .update({
+      name: namaBaru,
+      price: +hargaBaru || 0,
+      hpp: +hppBaru || 0,
+      type: typeBaru
+    })
+    .eq('id', id);
+
+  if(error){
+    console.error(error);
+    toast("Gagal edit");
+    return;
+  }
+
+  toast("Produk diupdate");
+  loadProducts();
 }
 
 function tambahBaris(){
