@@ -126,6 +126,7 @@ button {
     <button onclick="showMenu('laporan')" class="block mb-2 menu-btn">Laporan</button>
     <button onclick="showMenu('opname')" class="block mb-2 menu-btn">Stok Opname</button>
     <button onclick="showMenu('supplier')" class="block mb-2 menu-btn">Supplier</button>
+    <button onclick="showMenu('input')" class="block mb-2 menu-btn">Input</button>
   </div>
 
   <!-- CONTENT -->
@@ -225,11 +226,17 @@ button {
 
   <div id="formSupplier" class="card p-3 mb-3 hidden space-y-2 max-w-md">
     <input id="namaSupplier" placeholder="Nama Supplier">
-    <button onclick="tambahSupplier()" class="btn px-3">Simpan</button>
+    <button onclick="tambahSupplier()" class="btn px-3">
+      Simpan
+    </button>
   </div>
 
-  <input id="searchSupplier" placeholder="Cari supplier..." 
-         oninput="renderSupplier()" class="mb-3 max-w-md">
+  <input 
+    id="searchSupplier" 
+    placeholder="Cari supplier..." 
+    oninput="renderSupplier()" 
+    class="mb-3 max-w-md"
+  >
 
   <div class="card p-3">
     <table class="w-full text-sm">
@@ -240,6 +247,54 @@ button {
         </tr>
       </thead>
       <tbody id="listSupplier"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- INPUT BARANG -->
+<div id="input" class="hidden">
+  <h1 class="text-xl font-bold mb-3 text-yellow-400">Input Barang</h1>
+
+  <button 
+    onclick="toggleFormInput()" 
+    class="px-3 py-1 mb-3 rounded-lg font-bold text-white"
+    style="background: linear-gradient(135deg,#001f3f,#0074D9); box-shadow: 0 0 10px #0074D9;">
+  >
+    + Input Barang
+  </button>
+
+  <div id="formInput" class="card p-3 mb-3 hidden space-y-3 max-w-md">
+
+    <!-- PRODUK -->
+    <select id="inputProduk" class="w-full"></select>
+
+    <!-- SUPPLIER -->
+    <select id="inputSupplier" class="w-full"></select>
+
+    <!-- QTY -->
+    <input 
+      id="inputQty" 
+      type="number" 
+      placeholder="Jumlah Barang"
+    >
+
+    <button onclick="simpanInput()" class="btn px-3">
+      Simpan
+    </button>
+
+  </div>
+
+  <div class="card p-3">
+    <table class="w-full text-sm">
+      <thead>
+        <tr>
+          <th class="p-2 text-left">Tanggal</th>
+          <th class="p-2 text-left">Produk</th>
+          <th class="p-2 text-left">Supplier</th>
+          <th class="p-2 text-right">Qty</th>
+        </tr>
+      </thead>
+      <tbody id="listInput"></tbody>
     </table>
   </div>
 </div>
@@ -257,6 +312,7 @@ const supabaseClient = window.supabase.createClient(
 
 let products = [];
 let suppliers = [];
+let inputLogs = [];
 let cart = [];
 
 function rupiah(num){ return Number(num||0).toLocaleString('id-ID'); }
@@ -269,10 +325,17 @@ function toast(msg){
 }
 
 function showMenu(menu){
-  ['kasir','produk','laporan','opname','supplier'].forEach(id=>{
+  ['kasir','produk','laporan','opname','supplier','input'].forEach(id=>{
     document.getElementById(id).classList.add('hidden')
   });
+
   document.getElementById(menu).classList.remove('hidden');
+
+  // ✅ TAMBAHAN PENTING
+  if(menu === 'input'){
+    renderDropdownInput();
+    loadInputLogs();
+  }
 }
 
 async function loadProducts(){
@@ -649,8 +712,109 @@ async function simpanOpname(){
   document.getElementById('selisih').value = "";
 }
 
+async function loadInputLogs(){
+  let { data, error } = await supabaseClient
+    .from('input_logs')
+    .select('*, products(name), suppliers(name)')
+    .order('created_at', { ascending: false });
+
+  if(error){
+    console.error(error);
+    toast("Gagal load input");
+    return;
+  }
+
+  inputLogs = data || [];
+  renderInputLogs();
+}
+
+function renderInputLogs(){
+  let tbody = document.getElementById('listInput');
+  tbody.innerHTML = "";
+
+  if(inputLogs.length === 0){
+    tbody.innerHTML = `<tr><td colspan="4">Belum ada data</td></tr>`;
+    return;
+  }
+
+  inputLogs.forEach(i=>{
+    tbody.innerHTML += `
+      <tr>
+        <td class="p-2">${new Date(i.created_at).toLocaleString()}</td>
+        <td class="p-2">${i.products?.name || '-'}</td>
+        <td class="p-2">${i.suppliers?.name || '-'}</td>
+        <td class="p-2 text-right">${i.qty}</td>
+      </tr>
+    `;
+  });
+}
+
+function renderDropdownInput(){
+  let p = document.getElementById('inputProduk');
+  let s = document.getElementById('inputSupplier');
+
+  p.innerHTML = `<option value="">Pilih Produk</option>`;
+  s.innerHTML = `<option value="">Pilih Supplier</option>`;
+
+  products.forEach(x=>{
+    p.innerHTML += `<option value="${x.id}">${x.name}</option>`;
+  });
+
+  suppliers.forEach(x=>{
+    s.innerHTML += `<option value="${x.id}">${x.name}</option>`;
+  });
+}
+
+function toggleFormInput(){
+  document.getElementById('formInput').classList.toggle('hidden');
+}
+
+async function simpanInput(){
+  let product_id = document.getElementById('inputProduk').value;
+  let supplier_id = document.getElementById('inputSupplier').value;
+  let qty = +document.getElementById('inputQty').value || 0;
+
+  if(!product_id || !supplier_id || qty <= 0){
+    toast("Lengkapi data");
+    return;
+  }
+
+  // simpan log
+  let { error } = await supabaseClient
+    .from('input_logs')
+    .insert([{ product_id, supplier_id, qty }]);
+
+  if(error){
+    console.error(error);
+    toast("Gagal simpan");
+    return;
+  }
+
+  // update stok
+  let product = products.find(x=>String(x.id)===String(product_id));
+
+  await supabaseClient
+    .from('products')
+    .update({ stock: (product.stock || 0) + qty })
+    .eq('id', product_id);
+
+  toast("Berhasil input barang");
+
+  loadProducts();
+  loadInputLogs();
+
+  document.getElementById('inputQty').value = "";
+}
+
 loadProducts();
 loadSuppliers();
+loadInputLogs();
+
+// isi dropdown setelah data siap
+setTimeout(()=>{
+  renderDropdownInput();
+},500);
+
 </script>
 
 </body>
