@@ -133,36 +133,74 @@ button {
   <div class="flex-1 p-4">
 
     <!-- KASIR -->
-    <div id="kasir">
-      <h1 class="text-xl font-bold mb-3 text-yellow-400">Kasir</h1>
+<div id="kasir">
+  <h1 class="text-xl font-bold mb-3 text-yellow-400">Kasir</h1>
 
-      <button onclick="tambahBaris()" class="px-3 py-1 mb-3 btn">
-        + Tambah Item
-      </button>
+  <button onclick="tambahBaris()" class="px-3 py-1 mb-3 btn">
+    + Tambah Item
+  </button>
 
-      <div class="card p-3">
-        <table class="w-full text-sm table-fixed">
-          <thead>
-            <tr>
-              <th class="w-4/12 p-2 text-left">Barang</th>
-              <th class="w-2/12 p-2 text-right">Harga</th>
-              <th class="w-2/12 p-2 text-center">Qty</th>
-              <th class="w-3/12 p-2 text-right">Total</th>
-              <th class="w-1/12"></th>
-            </tr>
-          </thead>
-          <tbody id="cart"></tbody>
-        </table>
-      </div>
+  <div class="card p-3">
+    <table class="w-full text-sm table-fixed">
+      <thead>
+        <tr>
+          <th class="w-4/12 p-2 text-left">Barang</th>
+          <th class="w-2/12 p-2 text-right">Harga</th>
+          <th class="w-2/12 p-2 text-center">Qty</th>
+          <th class="w-3/12 p-2 text-right">Total</th>
+          <th class="w-1/12"></th>
+        </tr>
+      </thead>
+      <tbody id="cart"></tbody>
+    </table>
+  </div>
 
-      <h2 class="mt-4 text-xl font-bold text-right text-yellow-400">
-        Total: Rp <span id="total">0</span>
-      </h2>
+  <!-- 🔥 DISKON -->
+  <div class="mt-4 max-w-sm ml-auto space-y-2">
 
-      <button onclick="checkout()" class="px-4 py-2 mt-2 float-right btn">
-        Bayar
-      </button>
-    </div>
+    <select id="diskonType" onchange="renderCart()">
+      <option value="">Tanpa Diskon</option>
+      <option value="percent">Diskon %</option>
+      <option value="nominal">Diskon Nominal</option>
+    </select>
+
+    <input 
+      id="diskonValue" 
+      type="number" 
+      placeholder="Nilai diskon"
+      oninput="renderCart()"
+    >
+
+  </div>
+
+  <!-- TOTAL -->
+<h2 class="mt-4 text-xl font-bold text-right text-yellow-400">
+  Total: Rp <span id="total">0</span>
+</h2>
+
+<!-- INPUT BAYAR -->
+<div class="mt-2 text-right">
+  <label class="text-sm">Uang Bayar:</label><br>
+  <input 
+    id="bayar" 
+    type="number" 
+    class="p-1 text-right border rounded w-40"
+    placeholder="Masukkan uang"
+    oninput="hitungKembalian()"
+  >
+</div>
+
+<!-- KEMBALIAN -->
+<h2 class="mt-2 text-lg font-bold text-right text-green-400">
+  Kembalian: Rp <span id="kembalian">0</span>
+</h2>
+
+<!-- BUTTON BAYAR -->
+<button onclick="checkout()" class="px-4 py-2 mt-2 float-right btn">
+  Bayar
+</button>
+
+</div>
 
     <!-- PRODUK -->
 <div id="produk" class="hidden">
@@ -697,19 +735,21 @@ function tambahBaris(){
 
 function renderCart(){
   let tbody = document.getElementById('cart');
-  tbody.innerHTML="";
-  let total=0;
+  tbody.innerHTML = "";
 
-  cart.forEach((item,i)=>{
-    tbody.innerHTML+=`
+  let total = 0;
+
+  cart.forEach((item, i) => {
+    tbody.innerHTML += `
       <tr>
         <td class="p-1">
           <select onchange="pilihProduk(${i},this.value)">
             <option value="">Pilih</option>
-            ${products.map(p=>`
-              <option value="${p.id}" ${String(item.product_id)===String(p.id)?"selected":""}>
+            ${products.map(p => `
+              <option value="${p.id}" ${String(item.product_id) === String(p.id) ? "selected" : ""}>
                 ${p.name}
-              </option>`).join("")}
+              </option>
+            `).join("")}
           </select>
         </td>
 
@@ -728,11 +768,33 @@ function renderCart(){
         <td class="text-center">
           <button onclick="hapusItem(${i})">❌</button>
         </td>
-      </tr>`;
-    total+=item.total;
+      </tr>
+    `;
+
+    total += item.total;
   });
 
-  document.getElementById('total').innerText=rupiah(total);
+  // 🔥 AMBIL DISKON
+  let diskonType = document.getElementById('diskonType')?.value || "";
+  let diskonValue = +document.getElementById('diskonValue')?.value || 0;
+
+  let diskon = 0;
+
+  if(diskonType === "percent"){
+    diskon = total * (diskonValue / 100);
+  }
+  else if(diskonType === "nominal"){
+    diskon = diskonValue;
+  }
+
+  // 🔥 HITUNG GRAND TOTAL
+  let grandTotal = total - diskon;
+
+  // ❗ jaga biar tidak minus
+  if(grandTotal < 0) grandTotal = 0;
+
+  // 🔥 TAMPILKAN
+  document.getElementById('total').innerText = rupiah(grandTotal);
 }
 
 function pilihProduk(i,id){
@@ -807,6 +869,17 @@ async function checkout(){
     return;
   }
 
+  // 🔥 VALIDASI BAYAR
+  let bayar = parseInt(document.getElementById('bayar')?.value) || 0;
+
+  let totalText = document.getElementById('total').innerText.replace(/\D/g,'');
+  let total = parseInt(totalText) || 0;
+
+  if(bayar < total){
+    toast("Uang bayar kurang!");
+    return;
+  }
+
   try {
 
     let { data, error } = await supabaseClient.rpc('checkout_transaction', {
@@ -819,9 +892,19 @@ async function checkout(){
 
     console.log("ID Transaksi:", data);
 
-    cart=[];
+    // 🔥 PRINT NOTA (sebelum cart dikosongkan)
+    printNota();
+
+    // 🔥 RESET CART
+    cart = [];
+
     await loadProducts();
     renderCart();
+
+    // 🔥 RESET INPUT BIAR BALIK KE 0
+    document.getElementById('bayar').value = "";
+    document.getElementById('kembalian').innerText = "0";
+
     toast("Transaksi berhasil");
 
   } catch(e){
@@ -976,6 +1059,132 @@ async function simpanInput(){
   loadInputLogs();
 
   document.getElementById('inputQty').value = "";
+}
+
+function printNota(){
+
+  let total = 0;
+  cart.forEach(i => total += i.total);
+
+  let diskonType = document.getElementById('diskonType')?.value || "";
+  let diskonValue = +document.getElementById('diskonValue')?.value || 0;
+
+  let diskon = 0;
+
+  if(diskonType === "percent"){
+    diskon = total * (diskonValue / 100);
+  } else if(diskonType === "nominal"){
+    diskon = diskonValue;
+  }
+
+  let grandTotal = total - diskon;
+  if(grandTotal < 0) grandTotal = 0;
+
+  // 🔥 AMBIL BAYAR & KEMBALIAN
+  let bayar = parseInt(document.getElementById('bayar')?.value) || 0;
+  let kembali = bayar - grandTotal;
+  if(kembali < 0) kembali = 0;
+
+  let tanggal = new Date().toLocaleString();
+  let nomorNota = "INV-" + Date.now();
+
+  let rows = "";
+
+  cart.forEach(item=>{
+    let nama = products.find(p=>p.id == item.product_id)?.name || "-";
+
+    rows += `
+      <tr>
+        <td colspan="2">${nama}</td>
+      </tr>
+      <tr>
+        <td>${item.qty} x ${rupiah(item.price)}</td>
+        <td style="text-align:right">${rupiah(item.total)}</td>
+      </tr>
+    `;
+  });
+
+  let win = window.open('', '', 'width=300');
+
+  win.document.write(`
+    <html>
+    <head>
+      <title>Nota</title>
+      <style>
+        body{
+          font-family: monospace;
+          width: 58mm;
+          font-size: 12px;
+        }
+        table{ width:100%; }
+        hr{ border-top: 1px dashed black; }
+        .right{ text-align:right; }
+      </style>
+    </head>
+    <body>
+
+      <center>
+        <b>Central Grosir Santosa</b><br>
+        ${tanggal}<br>
+        ${nomorNota}
+      </center>
+
+      <hr>
+
+      <table>${rows}</table>
+
+      <hr>
+
+      <table>
+        <tr>
+          <td>Total</td>
+          <td class="right">${rupiah(total)}</td>
+        </tr>
+        <tr>
+          <td>Diskon</td>
+          <td class="right">-${rupiah(diskon)}</td>
+        </tr>
+        <tr>
+          <td><b>Grand Total</b></td>
+          <td class="right"><b>${rupiah(grandTotal)}</b></td>
+        </tr>
+      </table>
+
+      <hr>
+
+      <table>
+        <tr>
+          <td>Bayar</td>
+          <td class="right">${rupiah(bayar)}</td>
+        </tr>
+        <tr>
+          <td>Kembalian</td>
+          <td class="right">${rupiah(kembali)}</td>
+        </tr>
+      </table>
+
+      <hr>
+      <center>Terima kasih 🙏</center>
+
+    </body>
+    </html>
+  `);
+
+  win.document.close();
+  win.print();
+}
+
+function hitungKembalian(){
+  let totalText = document.getElementById('total').innerText.replace(/\D/g,'');
+  let total = parseInt(totalText) || 0;
+
+  let bayar = parseInt(document.getElementById('bayar').value) || 0;
+
+  let kembali = bayar - total;
+
+  if(kembali < 0) kembali = 0;
+
+  document.getElementById('kembalian').innerText = rupiah(kembali);
 }
 
 loadProducts();
